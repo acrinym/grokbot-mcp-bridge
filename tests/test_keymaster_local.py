@@ -111,6 +111,23 @@ def test_named_pipe_frame_is_bounded_and_never_forwards_extra_fields():
     assert json.loads(pipe.sent[4:]) == {"kind": "status"}
 
 
+def test_new_native_ack_after_full_reply_and_legacy_backward_compatibility():
+    body = json.dumps({"status": "available", "pending": 2, "ackRequired": True}).encode()
+    wire = FakePipe(struct.pack("<I", len(body)) + body)
+    with patch.object(bridge, "_is_windows", return_value=True), patch("builtins.open", return_value=wire):
+        result = bridge._wire_call({"kind": "status"})
+    assert result == {"status": "available", "pending": 2}
+    request_size = struct.unpack("<I", wire.sent[:4])[0]
+    assert json.loads(wire.sent[4:4+request_size]) == {"kind": "status"}
+    assert wire.sent[4+request_size:] == b"KMA1"
+    # A pre-upgrade Keymaster reply contains no ACK field and receives none.
+    legacy = json.dumps({"status": "available", "pending": 2}).encode()
+    old = FakePipe(struct.pack("<I", len(legacy)) + legacy)
+    with patch.object(bridge, "_is_windows", return_value=True), patch("builtins.open", return_value=old):
+        assert bridge._wire_call({"kind": "status"}) == {"status": "available", "pending": 2}
+    assert old.sent[4:] == b'{"kind":"status"}'
+
+
 def test_invalid_or_oversize_native_replies_fail_closed():
     payload = {"kind": "status"}
     possibilities = [
@@ -119,6 +136,7 @@ def test_invalid_or_oversize_native_replies_fail_closed():
         {"status": "queued_unverified", "requestId": "x" * 24, "pending": 1},
         {"status": "available", "pending": True},
         {"status": "available", "pending": 1, "secret": "should-not-escape"},
+        {"status": "available", "pending": 1, "ackRequired": "yes"},
     ]
     for response in possibilities:
         body = json.dumps(response).encode()

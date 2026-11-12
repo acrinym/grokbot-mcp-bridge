@@ -221,3 +221,7 @@ Two additional tools are available **only** in the local stdio process; the netw
 The existing Windows Keymaster desktop must already be running with its owner inbox listener. Open **Credential vault → Review proposals in Windows** to view the queued **unverified** request. The new Keymaster UI updates the nonsecret pending count upon an arrival event without passing any proposal metadata into React. Requests are in memory and disappear when Keymaster closes. Without the live local desktop, or outside Windows, both tools report unavailable; they do not use a remote proxy or create an alternate vault.
 
 This is **local process proposal routing**, not a verified remote Grok Bot identity. The remotely executing Grok Bot automation and the GrokBOT HTTP bridge cannot reach the Windows named pipe. Authentication, owner grants, encrypted audit, actual Mode 1/Mode 2 execution and remote-safe connectivity remain future Keymaster work.
+
+### Native Keymaster wire compatibility
+
+The local Windows-only Keymaster adapter supports both the original nonsecret pipe response and the newer optional `ackRequired:true` reply. For that newer response it sends a fixed `KMA1` delivery acknowledgment **after reading the complete bounded reply**. This prevents an indefinitely blocking server flush and preserves compatibility with an older running Keymaster desktop. The acknowledgment is not an AI identity, grant or owner approval; no secrets or provider actions are involved.

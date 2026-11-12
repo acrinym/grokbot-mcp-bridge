@@ -148,3 +148,7 @@ In this mode:
 - Local test proof must execute a real SDK stdio MCP client against the subprocess, verify discovery/status and confirm HTTP `/mcp` remains absent from callback-only listener. Test conditions use fictional keys and no webhook call.
 
 Existing network MCP and Fly.io deployment continue unchanged.
+
+### 9.1 Optional Keymaster local-pipe delivery ACK
+
+The local-only, unverified nonsecret proposal wire remains length-prefixed JSON. A newer Keymaster reply may include `"ackRequired":true`; the Python client reads and decodes the complete response, sends the four ASCII bytes `KMA1`, and strips the internal flag before returning the public status/proposal result. Older Keymaster replies omit the flag and require no ACK. Unknown properties, malformed flags, bad sizes and unexpected actions fail closed. The server's time-bounded ACK coordination must **never** be interpreted as native AI authentication, credential authorization or a provider-operation receipt.

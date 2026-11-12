@@ -220,3 +220,7 @@ python /absolute/path/to/grokbot-mcp-bridge/scripts/grokbot-mcp-stdio.py
 受信には所有者の Windows Keymaster デスクトップが実際に起動中である必要があります。**Credential vault → Review proposals in Windows** から**未認証**の保留リクエストを確認できます。Keymaster の画面は非秘密の受信イベントによって件数を自動更新します。React に提案内容を送信しません。受信箱はメモリ上にあり、アプリ終了で消えます。Windows 以外、または Keymaster 停止中は unavailable です。リモートプロキシや別の保管庫を作りません。
 
 これは**ローカルでの確認提案配送**であり、リモート Grok Bot の本人確認ではありません。リモート Grok Bot automation と HTTP ブリッジからは Windows の名前付きパイプにアクセスできません。認証・所有者による個別権限・暗号化監査・Mode 1/Mode 2 実行・安全なリモート接続は今後の Keymaster 実装が必要です。
+
+### Keymaster ネイティブ通信の互換性
+
+Windows 専用のローカル Keymaster アダプターは、従来の非秘密パイプ応答と、新しい任意の `ackRequired:true` 応答の両方に対応します。新しい応答では、サイズ制限内の返信をすべて読み取った後に `KMA1` という固定の受信確認を送ります。これによりサーバー側の無期限フラッシュ待機を避け、起動中の旧版 Keymaster とも互換性を保ちます。この確認は AI の本人確認・権限・所有者の承認ではなく、秘密やプロバイダー操作も扱いません。

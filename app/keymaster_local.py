@@ -83,7 +83,16 @@ def _wire_call(payload: dict[str, object]) -> dict[str, object]:
             if not 0 < size <= MAX_FRAME_BYTES:
                 return {"status": "unavailable"}
             body = _read_exact(wire, size)
-        answer = json.loads(body)
+            answer = json.loads(body)
+            # New Keymaster instances require a four-byte nonsecret delivery
+            # ACK after the entire bounded reply has been read and decoded.
+            # Older running desktop builds do not advertise it.
+            if isinstance(answer, dict) and answer.get("ackRequired") is True:
+                wire.write(b"KMA1")
+        if isinstance(answer, dict):
+            ack_flag = answer.pop("ackRequired", None)
+            if ack_flag is not None and ack_flag is not True:
+                return {"status": "unavailable"}
     except (OSError, UnicodeError, ValueError, TypeError, json.JSONDecodeError):
         return {"status": "unavailable"}
 
