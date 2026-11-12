@@ -135,7 +135,7 @@ Poke-side setup: use the `/mcp` URL as the MCP URL and put the value of `MCP_API
 
 ## 9. Local stdio adapter (optional, no Fly-specific dependency)
 
-`app.stdio:main` is an additional entry point, exposed as the installable `grokbot-mcp-stdio` command, `python -m app.stdio`, or the cwd-independent `scripts/grokbot-mcp-stdio.py` launcher. It uses the SAME existing MCP tool registrations, IDs, database, rate-limit logic and callback handlers as the public HTTP bridge.
+`app.stdio:main` is an additional entry point, exposed as the installable `grokbot-mcp-stdio` command, `python -m app.stdio`, or the cwd-independent `scripts/grokbot-mcp-stdio.py` launcher. It uses the SAME eight existing Grok Bot tool registrations, IDs, database, rate-limit logic and callback handlers as the public HTTP bridge, then adds two **LOCAL-STDIO-ONLY** nonsecret Keymaster inbox tools. The remote HTTP/SSE service remains exactly eight tools.
 
 In this mode:
 
@@ -144,7 +144,7 @@ In this mode:
 - The default SQLite state is outside the repository, in the current user's OS state directory, unless an explicit `DB_PATH` is supplied. The service leaves no ephemeral worktree or second credentials database.
 - `CURSOR_WEBHOOK_URL` / `CURSOR_WEBHOOK_API_KEY` are local owner-provided environment settings. Neither one is returned by an MCP tool or echoed on stdout, which is reserved for protocol JSON-RPC.
 - An externally reachable **HTTPS** `PUBLIC_BASE_URL` must point at an owner-configured secure ingress to the loopback callback receiver for *remote* Grok Bot to return actual answers. The adapter does NOT create a tunnel or independently authenticate an upstream Grok Bot identity; localhost callback URLs are unreachable from remote automation.
-- No Keymaster or other credential service is automatically connected, and there is no implicit identity assertion or grant. This adapter does not turn the private local Windows vault into a network MCP service.
+- When the native Windows Keymaster desktop is running, the local stdio adapter can access only its existing nonsecret proposal pipe; no grant or secret access is enabled. Non-Windows and stopped desktop return unavailable. The remote HTTP MCP stays unchanged and cannot access the Windows pipe. This does not turn the private local vault into a network MCP service.
 - Local test proof must execute a real SDK stdio MCP client against the subprocess, verify discovery/status and confirm HTTP `/mcp` remains absent from callback-only listener. Test conditions use fictional keys and no webhook call.
 
 Existing network MCP and Fly.io deployment continue unchanged.

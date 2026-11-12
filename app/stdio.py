@@ -37,6 +37,7 @@ from fastapi import FastAPI  # noqa: E402
 
 from app import config, tools  # noqa: E402,F401 — register all existing MCP tools
 from app.mcp_app import mcp  # noqa: E402
+from app.keymaster_local import register_local_keymaster_tools  # noqa: E402
 from app.routes import register_routes  # noqa: E402
 
 
@@ -54,6 +55,9 @@ def callback_app() -> FastAPI:
 async def serve_stdio() -> None:
     if mcp is None:
         raise RuntimeError("MCP SDK is required for local stdio mode")
+    # These two nonsecret Keymaster tools are LOCAL STDIO-ONLY. Do not add
+    # them to app.main HTTP/SSE registrations, including the Fly deployment.
+    register_local_keymaster_tools(mcp)
     # Never expose a token-auth callback listener on a public interface from
     # an AI-host launch. Public routing, if wanted, is owner-configured
     # HTTPS ingress terminating at this loopback port.

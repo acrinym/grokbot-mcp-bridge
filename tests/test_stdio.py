@@ -58,15 +58,33 @@ def test_real_grokbot_stdio_mcp_process_discover_and_status_without_webhook():
                 async with ClientSession(reader, writer) as session:
                     await session.initialize()
                     available = {item.name for item in (await session.list_tools()).tools}
-                    assert {
+                    assert available == {
                         "bridge_status", "ask_grokbot", "wait_for_grokbot_answer",
                         "list_grokbot_runs", "get_grokbot_run", "cancel_run",
                         "list_grokbot_events", "get_grokbot_event",
-                    } <= available
+                        "keymaster_local_inbox_status", "keymaster_request_owner_review",
+                    }
                     output = await session.call_tool("bridge_status", {})
                     assert output.is_error is False
                     payload = json.loads(output.content[0].text)
                     assert payload["webhook_url_configured"] is False
                     assert payload["webhook_api_key_configured"] is False
+                    response = await session.call_tool("keymaster_local_inbox_status", {})
+                    assert response.is_error is False
+                    inbox = json.loads(response.content[0].text)
+                    assert inbox["status"] in ("available", "unavailable")
+                    assert inbox["verifiedClient"] is False
+                    assert inbox["authorizedCredentialUse"] is False
+                    # Reject arbitrary action/credential-like values locally.
+                    bad = await session.call_tool("keymaster_request_owner_review", {
+                        "credential_id": "fictional_only",
+                        "purpose": "This is not a credential",
+                        "mode": "invoke",
+                        "action": "https://example.invalid/key"
+                    })
+                    assert bad.is_error is False
+                    refused = json.loads(bad.content[0].text)
+                    assert refused["status"] == "rejected"
+                    assert refused["authorizedCredentialUse"] is False
         asyncio.run(asyncio.wait_for(exercise(), timeout=20))
         assert (Path(directory) / "runs.db").is_file()
