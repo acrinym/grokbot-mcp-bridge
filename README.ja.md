@@ -180,3 +180,28 @@ flyctl deploy --remote-only --ha=false     # デプロイ（app / region は fly
 ## ライセンス
 
 MIT — [LICENSE](LICENSE) を参照。
+
+## ローカル stdio MCP（デスクトップ AI クライアント向け）
+
+Fly.io 上に MCP サーバーを設置せず、ローカルの **stdio MCP** としてブリッジを起動できます。HTTP 版と同じ 8 つのツールを公開し、Grok Bot の非同期コールバックを受け取るために `127.0.0.1:PORT` の**ループバック専用** HTTP 受信口も起動します。MCP 通信自体は標準入出力を使い、公開 HTTP MCP やローカル接続用の `MCP_API_KEY` は不要です。
+
+選択した Python 環境にリポジトリをインストールし、対応するローカル AI クライアントから `grokbot-mcp-stdio` を起動してください。
+
+```shell
+python -m pip install -e .
+grokbot-mcp-stdio
+# このリポジトリ内から直接起動する場合:
+python -m app.stdio
+# 任意の作業ディレクトリから（パッケージのインストール不要）:
+python /absolute/path/to/grokbot-mcp-bridge/scripts/grokbot-mcp-stdio.py
+```
+
+`CURSOR_WEBHOOK_URL` と `CURSOR_WEBHOOK_API_KEY` は、所有者が管理する秘密情報の保管方法から**プロセス環境変数**へ渡してください。チャット、Git 管理下の MCP 設定、コマンド引数、リポジトリの `.env` に実際の値を書かないでください。未設定の場合も 8 ツールの列挙は可能で、`bridge_status` は Grok Bot の実行が未設定であることを正しく返します。
+
+**非同期コールバックの前提条件:** リモートの Cursor automation から PC の `127.0.0.1` へはアクセスできません。実際の返答を受け取るには、所有者が管理する外部から到達可能な **HTTPS** ホスト名を `PUBLIC_BASE_URL` に設定し、その `/callbacks/{token}` をローカル `PORT` へ安全に転送する必要があります。リバースプロキシ、トンネル、TLS、DNS、外部公開は自動構築されません。到達可能なコールバックがなければ、送信に成功しても `ask_grokbot` は pending を返すことがあります。公開するのはコールバック用パスのみとし、必要であれば署名検証付きの `/hooks/grokbot` を追加します。Keymaster の所有者認証・秘密情報とは別の境界です。
+
+実行履歴の DB は既定で Git 作業ツリー外のユーザー専用 OS 保存先（Windows: `%LOCALAPPDATA%/GrokBOTMCPBridge/bridge.db`、Unix: `~/.local/state/grokbot-mcp-bridge/bridge.db`）に置かれます。`DB_PATH` を上書きする場合は保護された保存先を使用してください。コールバック受信口に HTTP `/mcp` はありません。 `GET /` は `stdio` / `loopback_only` を示します。ネットワーク MCP には従来の HTTP/SSE 版を使用してください。
+
+### ローカル MCP 登録の例
+
+インストール後、デスクトップ AI クライアントの stdio サーバーコマンドを `grokbot-mcp-stdio`（または実行ファイルの絶対パス）に設定します。秘密情報を引数に渡さないでください。Keymaster のローカル stdio MCP を併用する場合は `keymaster` という**別のサーバー**として登録します。双方を登録しただけで Keymaster の Windows 保管庫が Grok Bot のリモート実行環境につながることも、AI への秘密情報の利用権限が与えられることもありません。

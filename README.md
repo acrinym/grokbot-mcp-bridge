@@ -181,3 +181,28 @@ flyctl deploy --remote-only --ha=false     # deploy (app / region come from fly.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Local stdio MCP (desktop AI hosts, without a Fly.io MCP deployment)
+
+The bridge also supports **local MCP over stdio**. This uses the exact same eight tools as the HTTP MCP server. It starts a **loopback-only** HTTP receiver at `127.0.0.1:PORT` for Grok Bot's asynchronous callbacks; the server's MCP protocol itself uses stdin/stdout. It does not open a public MCP endpoint or require `MCP_API_KEY` for the local stdio connection.
+
+Install the package from this repository in your chosen Python environment, then configure the local MCP-capable host to run the installed `grokbot-mcp-stdio` command:
+
+```shell
+python -m pip install -e .
+grokbot-mcp-stdio
+# Or, from this repository:
+python -m app.stdio
+# Or from any working directory, without installing the package:
+python /absolute/path/to/grokbot-mcp-bridge/scripts/grokbot-mcp-stdio.py
+```
+
+Provide `CURSOR_WEBHOOK_URL` and `CURSOR_WEBHOOK_API_KEY` to the **local process environment** using the owner's secret management, not in chat, a checked-in MCP config, command arguments, or a repository `.env`. With neither set, the eight tools are still discoverable and `bridge_status` truthfully reports that live Grok Bot invocation is not configured.
+
+**Asynchronous callback prerequisite:** A remote Cursor automation cannot POST a response to your laptop's `127.0.0.1`. To receive live answers, explicitly configure `PUBLIC_BASE_URL` to an owner-managed, externally reachable **HTTPS** hostname that securely proxies `/callbacks/{token}` to the local loopback `PORT`. The reverse proxy/tunnel, TLS, DNS and inbound exposure are **not** created automatically. Without reachable callbacks, `ask_grokbot` may return a pending run even if its outbound webhook succeeds. To avoid exposing the MCP itself, forward only the callback path (and signed `/hooks/grokbot` if desired). Owner-authenticated access and secrets remain separate from Keymaster.
+
+Local run records default to a per-user OS state directory (`%LOCALAPPDATA%/GrokBOTMCPBridge/bridge.db` on Windows, `~/.local/state/grokbot-mcp-bridge/bridge.db` on Unix), **not this Git checkout**. Override `DB_PATH` only if you control a suitably private location. The callback receiver does not run an HTTP `/mcp` service; `GET /` identifies this listener as `stdio` / `loopback_only`. Use the regular documented HTTP/SSE service instead for network MCP clients.
+
+### Example local MCP registration
+
+After installation, set your AI host's stdio server command to `grokbot-mcp-stdio` (or the full path to that executable), with no runtime credentials in the arguments. Keep the existing Keymaster local stdio server separately named `keymaster` if using both. Connecting these **two distinct MCP servers** does **not** connect Keymaster's Windows credential vault to Grok Bot's remote box, nor grant any AI credential access.

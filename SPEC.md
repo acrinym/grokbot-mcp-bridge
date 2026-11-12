@@ -132,3 +132,19 @@ flyctl logs -a <app>                       # logs for run created / callback res
 ```
 
 Poke-side setup: use the `/mcp` URL as the MCP URL and put the value of `MCP_API_KEY` in the API Key field (without the "Bearer" prefix). Poke re-fetches tool definitions automatically after tool names change.
+
+## 9. Local stdio adapter (optional, no Fly-specific dependency)
+
+`app.stdio:main` is an additional entry point, exposed as the installable `grokbot-mcp-stdio` command, `python -m app.stdio`, or the cwd-independent `scripts/grokbot-mcp-stdio.py` launcher. It uses the SAME existing MCP tool registrations, IDs, database, rate-limit logic and callback handlers as the public HTTP bridge.
+
+In this mode:
+
+- The MCP protocol is **STDIO ONLY**, read/written by the owner-launched local AI client. There is no HTTP `/mcp` or `/sse` route.
+- A separate receiver listens **only** at `127.0.0.1:PORT`, with the existing bounded `/callbacks/{token}` and signed `/hooks/grokbot` endpoints, plus health/read-only root. A client cannot provide arbitrary bind addresses.
+- The default SQLite state is outside the repository, in the current user's OS state directory, unless an explicit `DB_PATH` is supplied. The service leaves no ephemeral worktree or second credentials database.
+- `CURSOR_WEBHOOK_URL` / `CURSOR_WEBHOOK_API_KEY` are local owner-provided environment settings. Neither one is returned by an MCP tool or echoed on stdout, which is reserved for protocol JSON-RPC.
+- An externally reachable **HTTPS** `PUBLIC_BASE_URL` must point at an owner-configured secure ingress to the loopback callback receiver for *remote* Grok Bot to return actual answers. The adapter does NOT create a tunnel or independently authenticate an upstream Grok Bot identity; localhost callback URLs are unreachable from remote automation.
+- No Keymaster or other credential service is automatically connected, and there is no implicit identity assertion or grant. This adapter does not turn the private local Windows vault into a network MCP service.
+- Local test proof must execute a real SDK stdio MCP client against the subprocess, verify discovery/status and confirm HTTP `/mcp` remains absent from callback-only listener. Test conditions use fictional keys and no webhook call.
+
+Existing network MCP and Fly.io deployment continue unchanged.
