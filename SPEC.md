@@ -132,3 +132,23 @@ flyctl logs -a <app>                       # logs for run created / callback res
 ```
 
 Poke-side setup: use the `/mcp` URL as the MCP URL and put the value of `MCP_API_KEY` in the API Key field (without the "Bearer" prefix). Poke re-fetches tool definitions automatically after tool names change.
+
+## 9. Local stdio adapter (optional, no Fly-specific dependency)
+
+`app.stdio:main` is an additional entry point, exposed as the installable `grokbot-mcp-stdio` command, `python -m app.stdio`, or the cwd-independent `scripts/grokbot-mcp-stdio.py` launcher. It uses the SAME eight existing Grok Bot tool registrations, IDs, database, rate-limit logic and callback handlers as the public HTTP bridge, then adds two **LOCAL-STDIO-ONLY** nonsecret Keymaster inbox tools. The remote HTTP/SSE service remains exactly eight tools.
+
+In this mode:
+
+- The MCP protocol is **STDIO ONLY**, read/written by the owner-launched local AI client. There is no HTTP `/mcp` or `/sse` route.
+- A separate receiver listens **only** at `127.0.0.1:PORT`, with the existing bounded `/callbacks/{token}` and signed `/hooks/grokbot` endpoints, plus health/read-only root. A client cannot provide arbitrary bind addresses.
+- The default SQLite state is outside the repository, in the current user's OS state directory, unless an explicit `DB_PATH` is supplied. The service leaves no ephemeral worktree or second credentials database.
+- `CURSOR_WEBHOOK_URL` / `CURSOR_WEBHOOK_API_KEY` are local owner-provided environment settings. Neither one is returned by an MCP tool or echoed on stdout, which is reserved for protocol JSON-RPC.
+- An externally reachable **HTTPS** `PUBLIC_BASE_URL` must point at an owner-configured secure ingress to the loopback callback receiver for *remote* Grok Bot to return actual answers. The adapter does NOT create a tunnel or independently authenticate an upstream Grok Bot identity; localhost callback URLs are unreachable from remote automation.
+- When the native Windows Keymaster desktop is running, the local stdio adapter can access only its existing nonsecret proposal pipe; no grant or secret access is enabled. Non-Windows and stopped desktop return unavailable. The remote HTTP MCP stays unchanged and cannot access the Windows pipe. This does not turn the private local vault into a network MCP service.
+- Local test proof must execute a real SDK stdio MCP client against the subprocess, verify discovery/status and confirm HTTP `/mcp` remains absent from callback-only listener. Test conditions use fictional keys and no webhook call.
+
+Existing network MCP and Fly.io deployment continue unchanged.
+
+### 9.1 Optional Keymaster local-pipe delivery ACK
+
+The local-only, unverified nonsecret proposal wire remains length-prefixed JSON. A newer Keymaster reply may include `"ackRequired":true`; the Python client reads and decodes the complete response, sends the four ASCII bytes `KMA1`, and strips the internal flag before returning the public status/proposal result. Older Keymaster replies omit the flag and require no ACK. Unknown properties, malformed flags, bad sizes and unexpected actions fail closed. The server's time-bounded ACK coordination must **never** be interpreted as native AI authentication, credential authorization or a provider-operation receipt.

@@ -181,3 +181,47 @@ flyctl deploy --remote-only --ha=false     # deploy (app / region come from fly.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Local stdio MCP (desktop AI hosts, without a Fly.io MCP deployment)
+
+The bridge also supports **local MCP over stdio**. It includes the same eight Grok Bot tools as the HTTP MCP server **plus two local-only, nonsecret Keymaster owner-inbox tools** (10 tools total). It starts a **loopback-only** HTTP receiver at `127.0.0.1:PORT` for Grok Bot's asynchronous callbacks; the server's MCP protocol itself uses stdin/stdout. It does not open a public MCP endpoint or require `MCP_API_KEY` for the local stdio connection.
+
+Install the package from this repository in your chosen Python environment, then configure the local MCP-capable host to run the installed `grokbot-mcp-stdio` command:
+
+```shell
+python -m pip install -e .
+grokbot-mcp-stdio
+# Or, from this repository:
+python -m app.stdio
+# Or from any working directory, without installing the package:
+python /absolute/path/to/grokbot-mcp-bridge/scripts/grokbot-mcp-stdio.py
+```
+
+Provide `CURSOR_WEBHOOK_URL` and `CURSOR_WEBHOOK_API_KEY` to the **local process environment** using the owner's secret management, not in chat, a checked-in MCP config, command arguments, or a repository `.env`. With neither set, the eight Grok Bot tools and two local Keymaster proposal tools are still discoverable and `bridge_status` truthfully reports that live Grok Bot invocation is not configured.
+
+**Asynchronous callback prerequisite:** A remote Cursor automation cannot POST a response to your laptop's `127.0.0.1`. To receive live answers, explicitly configure `PUBLIC_BASE_URL` to an owner-managed, externally reachable **HTTPS** hostname that securely proxies `/callbacks/{token}` to the local loopback `PORT`. The reverse proxy/tunnel, TLS, DNS and inbound exposure are **not** created automatically. Without reachable callbacks, `ask_grokbot` may return a pending run even if its outbound webhook succeeds. To avoid exposing the MCP itself, forward only the callback path (and signed `/hooks/grokbot` if desired). Owner-authenticated access and secrets remain separate from Keymaster.
+
+Local run records default to a per-user OS state directory (`%LOCALAPPDATA%/GrokBOTMCPBridge/bridge.db` on Windows, `~/.local/state/grokbot-mcp-bridge/bridge.db` on Unix), **not this Git checkout**. Override `DB_PATH` only if you control a suitably private location. The callback receiver does not run an HTTP `/mcp` service; `GET /` identifies this listener as `stdio` / `loopback_only`. Use the regular documented HTTP/SSE service instead for network MCP clients.
+
+### Example local MCP registration
+
+After installation, set your AI host's stdio server command to `grokbot-mcp-stdio` (or the full path to that executable), with no runtime credentials in the arguments. Keep the existing Keymaster local stdio server separately named `keymaster` if using both. Connecting these **two distinct MCP servers** does **not** grant AI credential access or connect Keymaster's Windows vault to Grok Bot's remote box. The GrokBOT **local stdio** server can now check the *nonsecret* Windows owner inbox and submit a self-declared **UNVERIFIED proposal** to the running Keymaster desktop, but cannot enroll an AI, approve, retrieve, invoke or reveal credentials.
+
+### Keymaster local owner-inbox tools (stdio only, Windows)
+
+Two additional tools are available **only** in the local stdio process; the network HTTP/SSE bridge continues to expose its original eight Grok Bot tools:
+
+| Local tool | Safe behavior | Important limit |
+| --- | --- | --- |
+| `keymaster_local_inbox_status` | Read native inbox availability and aggregate pending count. | No client identities, vault metadata, credentials or approvals. |
+| `keymaster_request_owner_review` | Submit a fictional or later owner-reviewed **nonsecret** credential *proposal* for `credential_id`, `purpose`, `mode` and optional `action`. | The caller is displayed as **GrokBOT local MCP (UNVERIFIED)**. Queued is **not** authenticated, approved, granted, revealed, or invoked. |
+
+`credential_id` must be an ASCII identifier using letters/numbers/dot/underscore/dash (max 128 bytes). `purpose` is a short safe human-readable explanation (max 180 bytes) and **MUST NOT contain keys, passwords, tokens, URLs, account details or approval instructions**. `mode="reveal"` requests review of a *future* Mode 1 path and has no `action`. `mode="invoke"` requires exactly one of `hetzner.list_servers`, `coolify.list_applications` or `porkbun.list_domains`. Unknown fields are never forwarded to Keymaster, and unsupported actions are rejected. No provider is contacted by these tools.
+
+The existing Windows Keymaster desktop must already be running with its owner inbox listener. Open **Credential vault → Review proposals in Windows** to view the queued **unverified** request. The new Keymaster UI updates the nonsecret pending count upon an arrival event without passing any proposal metadata into React. Requests are in memory and disappear when Keymaster closes. Without the live local desktop, or outside Windows, both tools report unavailable; they do not use a remote proxy or create an alternate vault.
+
+This is **local process proposal routing**, not a verified remote Grok Bot identity. The remotely executing Grok Bot automation and the GrokBOT HTTP bridge cannot reach the Windows named pipe. Authentication, owner grants, encrypted audit, actual Mode 1/Mode 2 execution and remote-safe connectivity remain future Keymaster work.
+
+### Native Keymaster wire compatibility
+
+The local Windows-only Keymaster adapter supports both the original nonsecret pipe response and the newer optional `ackRequired:true` reply. For that newer response it sends a fixed `KMA1` delivery acknowledgment **after reading the complete bounded reply**. This prevents an indefinitely blocking server flush and preserves compatibility with an older running Keymaster desktop. The acknowledgment is not an AI identity, grant or owner approval; no secrets or provider actions are involved.

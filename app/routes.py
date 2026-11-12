@@ -60,13 +60,15 @@ def finish_callback_result(result: dict[str, Any]) -> JSONResponse | dict[str, A
     return JSONResponse({"error": result.get("error", "callback_failed")}, status_code=status)
 
 
-def register_routes(application: FastAPI) -> None:
+def register_routes(application: FastAPI, *, stdio_callback_only: bool = False) -> None:
     @application.get("/healthz")
     async def healthz():
         return {"ok": True}
 
     @application.get("/")
     async def root():
+        if stdio_callback_only:
+            return {"service": "grokbot-mcp-bridge", "mcp_transport": "stdio", "callback_receiver": "loopback_only"}
         return {
             "service": "grokbot-mcp-bridge",
             "mcp_streamable_http": "/mcp",

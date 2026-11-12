@@ -23,6 +23,7 @@ dev = [
 
 [project.scripts]
 grokbot-mcp-bridge = "app.main:main"
+grokbot-mcp-stdio = "app.stdio:main"
 
 [tool.setuptools]
 packages = ["app"]

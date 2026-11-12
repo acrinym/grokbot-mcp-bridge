@@ -132,3 +132,21 @@ flyctl logs -a <app>                       # run created / callback resolved / t
 ```
 
 Poke 側の設定: MCP URL に `/mcp`、API Key 欄に `MCP_API_KEY` の値（"Bearer" は付けない）。ツール名変更後は Poke が自動で再取得する。
+
+## 9. ローカル stdio アダプター（任意、Fly 固有の依存なし）
+
+`app.stdio:main` を追加のエントリポイントとし、`grokbot-mcp-stdio` コマンド、`python -m app.stdio`、または作業ディレクトリ非依存の `scripts/grokbot-mcp-stdio.py` で起動できます。公開 HTTP ブリッジと**同じ 8 つの Grok Bot ツール登録、識別子、DB、レート制限、コールバック処理**を使用し、ローカル stdio 専用の Keymaster 非秘密受信箱ツールを 2 つ追加します。リモート HTTP/SSE 側は 8 ツールのままです。
+
+- MCP は所有者がローカル起動した AI クライアントとの **標準入出力**通信のみで、HTTP `/mcp` や `/sse` の経路はありません。
+- 別の受信口は **`127.0.0.1:PORT` のみに** bind し、既存のサイズ制限付き `/callbacks/{token}` と署名検証付き `/hooks/grokbot`、health と読み取り専用の root を公開します。クライアントは bind アドレスを選択できません。
+- SQLite の既定保存先はユーザーの OS 状態ディレクトリで、Git リポジトリの外です。明示した `DB_PATH` で変更できます。作業用 worktree や別の資格情報 DB を作りません。
+- `CURSOR_WEBHOOK_URL` / `CURSOR_WEBHOOK_API_KEY` は所有者がローカルの環境変数に渡します。MCP ツールやプロトコル専用 stdout には値を出しません。
+- 実際のリモート Grok Bot から回答を受信するには、外部から到達可能な **HTTPS** `PUBLIC_BASE_URL` が所有者管理の安全な ingress を介してループバック受信口につながる必要があります。トンネルの自動作成やリモート Grok Bot の本人確認は行いません。リモート automation からローカルホストの callback URL へは到達できません。
+- ローカル stdio 版は Windows で実行中の Keymaster の**非秘密リクエスト受信箱のみ**に接続できます。停止中または Windows 以外では unavailable を返します。ID の認証・権限付与・資格情報の読み出しはできません。公開 HTTP MCP から Windows パイプへのアクセスはなく、ローカル保管庫をネットワーク MCP 化しません。
+- 実際の stdio MCP SDK クライアントを起動した発見・状態テストと、コールバック受信口に HTTP `/mcp` が存在しないことをテストで確認します。実際の webhook は呼びません。
+
+従来のネットワーク MCP および Fly.io 配備は変更しません。
+
+### 9.1 Keymaster ローカルパイプの任意受信確認
+
+ローカル専用・未認証の非秘密提案通信は引き続き長さ付き JSON です。新しい Keymaster の応答には `"ackRequired":true` が含まれる場合があります。Python クライアントは返信全体を読み取って解釈し、ASCII 4 バイトの `KMA1` を送信し、公開する結果から内部フラグを除きます。旧版の応答にはフラグがなく、確認も不要です。未知の項目、不正なフラグ、サイズや許可外の操作は拒否します。時間制限付きの受信確認を、AI の認証・資格情報利用権限・プロバイダー操作完了の証明と混同しません。

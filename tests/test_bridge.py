@@ -46,6 +46,9 @@ def test_health_and_mcp_auth_and_tools(client):
         payload = json.loads(data)
     tools = payload["result"]["tools"]
     names = {tool["name"] for tool in tools}
+    assert len(names) == 8, "Public HTTP MCP must not expose local Keymaster pipe tools"
+    assert "keymaster_local_inbox_status" not in names
+    assert "keymaster_request_owner_review" not in names
     assert {
         "get_grokbot_run",
         "wait_for_grokbot_answer",

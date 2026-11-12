@@ -180,3 +180,47 @@ flyctl deploy --remote-only --ha=false     # デプロイ（app / region は fly
 ## ライセンス
 
 MIT — [LICENSE](LICENSE) を参照。
+
+## ローカル stdio MCP（デスクトップ AI クライアント向け）
+
+Fly.io 上に MCP サーバーを設置せず、ローカルの **stdio MCP** としてブリッジを起動できます。HTTP 版と同じ 8 つの Grok Bot ツールに加え、ローカル専用の Keymaster 非秘密オーナー受信箱ツールを 2 つ（合計 10 ツール）公開し、Grok Bot の非同期コールバックを受け取るために `127.0.0.1:PORT` の**ループバック専用** HTTP 受信口も起動します。MCP 通信自体は標準入出力を使い、公開 HTTP MCP やローカル接続用の `MCP_API_KEY` は不要です。
+
+選択した Python 環境にリポジトリをインストールし、対応するローカル AI クライアントから `grokbot-mcp-stdio` を起動してください。
+
+```shell
+python -m pip install -e .
+grokbot-mcp-stdio
+# このリポジトリ内から直接起動する場合:
+python -m app.stdio
+# 任意の作業ディレクトリから（パッケージのインストール不要）:
+python /absolute/path/to/grokbot-mcp-bridge/scripts/grokbot-mcp-stdio.py
+```
+
+`CURSOR_WEBHOOK_URL` と `CURSOR_WEBHOOK_API_KEY` は、所有者が管理する秘密情報の保管方法から**プロセス環境変数**へ渡してください。チャット、Git 管理下の MCP 設定、コマンド引数、リポジトリの `.env` に実際の値を書かないでください。未設定の場合も 8 ツールの列挙は可能で、`bridge_status` は Grok Bot の実行が未設定であることを正しく返します。
+
+**非同期コールバックの前提条件:** リモートの Cursor automation から PC の `127.0.0.1` へはアクセスできません。実際の返答を受け取るには、所有者が管理する外部から到達可能な **HTTPS** ホスト名を `PUBLIC_BASE_URL` に設定し、その `/callbacks/{token}` をローカル `PORT` へ安全に転送する必要があります。リバースプロキシ、トンネル、TLS、DNS、外部公開は自動構築されません。到達可能なコールバックがなければ、送信に成功しても `ask_grokbot` は pending を返すことがあります。公開するのはコールバック用パスのみとし、必要であれば署名検証付きの `/hooks/grokbot` を追加します。Keymaster の所有者認証・秘密情報とは別の境界です。
+
+実行履歴の DB は既定で Git 作業ツリー外のユーザー専用 OS 保存先（Windows: `%LOCALAPPDATA%/GrokBOTMCPBridge/bridge.db`、Unix: `~/.local/state/grokbot-mcp-bridge/bridge.db`）に置かれます。`DB_PATH` を上書きする場合は保護された保存先を使用してください。コールバック受信口に HTTP `/mcp` はありません。 `GET /` は `stdio` / `loopback_only` を示します。ネットワーク MCP には従来の HTTP/SSE 版を使用してください。
+
+### ローカル MCP 登録の例
+
+インストール後、デスクトップ AI クライアントの stdio サーバーコマンドを `grokbot-mcp-stdio`（または実行ファイルの絶対パス）に設定します。秘密情報を引数に渡さないでください。Keymaster のローカル stdio MCP を併用する場合は `keymaster` という**別のサーバー**として登録します。双方を登録しても、Keymaster の Windows 保管庫が Grok Bot のリモート実行環境につながることも、AI への秘密情報の利用権限が与えられることもありません。GrokBOT の**ローカル stdio** サーバーは、実行中の Windows Keymaster に非秘密の受信箱状態確認と**未認証のオーナー確認リクエスト**を送信できますが、AI 登録・承認・秘密取得・プロバイダ操作はできません。
+
+### Keymaster ローカル所有者受信箱ツール（Windows の stdio 専用）
+
+追加の 2 ツールは**ローカル stdio プロセスのみ**で公開されます。ネットワーク HTTP/SSE ブリッジの Grok Bot ツールは従来どおり 8 つです。
+
+| ローカルツール | 安全な動作 | 制限 |
+| --- | --- | --- |
+| `keymaster_local_inbox_status` | ネイティブ受信箱の可用性と保留件数のみを取得 | クライアント ID・保管庫メタデータ・鍵・承認は取得しない |
+| `keymaster_request_owner_review` | `credential_id`、`purpose`、`mode`、必要なら `action` で**非秘密**の確認提案を送信 | 表示名は **GrokBOT local MCP (UNVERIFIED)**。受信しただけでは認証・承認・許可・秘密の開示・プロバイダ実行にならない |
+
+`credential_id` は英数字・ドット・アンダースコア・ハイフンの ASCII 識別子（最大 128 バイト）です。`purpose` は短い人間向け説明（最大 180 バイト）で、**秘密鍵、パスワード、トークン、URL、アカウント詳細や承認指示を入れないでください**。`mode="reveal"` は将来の Mode 1 に対する確認提案であり `action` はありません。`mode="invoke"` は `hetzner.list_servers`、`coolify.list_applications`、`porkbun.list_domains` のいずれかが必須です。未知のフィールドを Keymaster に転送せず、未対応のアクションは拒否します。これらのツールはプロバイダに接続しません。
+
+受信には所有者の Windows Keymaster デスクトップが実際に起動中である必要があります。**Credential vault → Review proposals in Windows** から**未認証**の保留リクエストを確認できます。Keymaster の画面は非秘密の受信イベントによって件数を自動更新します。React に提案内容を送信しません。受信箱はメモリ上にあり、アプリ終了で消えます。Windows 以外、または Keymaster 停止中は unavailable です。リモートプロキシや別の保管庫を作りません。
+
+これは**ローカルでの確認提案配送**であり、リモート Grok Bot の本人確認ではありません。リモート Grok Bot automation と HTTP ブリッジからは Windows の名前付きパイプにアクセスできません。認証・所有者による個別権限・暗号化監査・Mode 1/Mode 2 実行・安全なリモート接続は今後の Keymaster 実装が必要です。
+
+### Keymaster ネイティブ通信の互換性
+
+Windows 専用のローカル Keymaster アダプターは、従来の非秘密パイプ応答と、新しい任意の `ackRequired:true` 応答の両方に対応します。新しい応答では、サイズ制限内の返信をすべて読み取った後に `KMA1` という固定の受信確認を送ります。これによりサーバー側の無期限フラッシュ待機を避け、起動中の旧版 Keymaster とも互換性を保ちます。この確認は AI の本人確認・権限・所有者の承認ではなく、秘密やプロバイダー操作も扱いません。
